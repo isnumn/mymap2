@@ -8,8 +8,8 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- 카카오 지도 JavaScript SDK (appkey 및 libraries 포함) -->
-  <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=80bbf22d0111456cf471556fa6f0b270&libraries=services&autoload=false"></script>
+  <!-- 카카오 지도 JavaScript SDK (https: 명시로 연결 오류 방지) -->
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=80bbf22d0111456cf471556fa6f0b270&libraries=services&autoload=false"></script>
   
   <style>
     /* 카카오맵 인포윈도우 커스텀 스타일 */
@@ -49,7 +49,7 @@
 
       <!-- 위치 정보 상태 안내 메시지 -->
       <div id="status-message" class="px-4 py-1.5 text-xs text-gray-500 bg-white border-b border-gray-100">
-        고양시 지역 고등학교 검색 중...
+        지도 초기화 중...
       </div>
 
       <!-- 검색 결과 목록 출력 리스트 -->
@@ -64,7 +64,7 @@
     <!-- [오른쪽 영역] 카카오 지도 영역 -->
     <div class="flex-1 h-1/2 md:h-full relative">
       <!-- 지도 컨테이너 -->
-      <div id="map" class="w-full h-full"></div>
+      <div id="map" class="w-full h-full bg-gray-200"></div>
 
       <!-- 현재위치 버튼 -->
       <div class="absolute top-4 right-4 z-30 flex flex-col gap-2">
@@ -81,28 +81,25 @@
 
   <!-- JavaScript 연동 -->
   <script>
-    // 전역 변수 선언
-    let map = null;               // 지도 객체
-    let ps = null;                // 장소 검색 객체
-    let infowindow = null;        // 인포윈도우(팝업) 객체
-    let markers = [];             // 마커 배열
-    let currentLocation = null;   // 현재 위치 좌표
+    let map = null;
+    let ps = null;
+    let infowindow = null;
+    let markers = [];
+    let currentLocation = null;
 
-    // 고양시 영역 좌표 범위 (swLng, swLat, neLng, neLat)
     const goyangBoundsRect = "126.7000,37.5800,126.9600,37.7300";
 
-    // SDK 로딩 오류 방지 (kakao.maps.load 사용)
-    kakao.maps.load(function () {
-      initMap();
-    });
+    // SDK 불러오기 안전 처리
+    if (window.kakao && window.kakao.maps) {
+      kakao.maps.load(function () {
+        initMap();
+      });
+    } else {
+      document.getElementById('status-message').innerHTML = '<span class="text-red-500">⚠️ 카카오 지도 SDK 로딩 실패 (API 키 또는 도메인을 확인해주세요)</span>';
+    }
 
-    /**
-     * 지도 및 서비스 초기화
-     */
     function initMap() {
       const mapContainer = document.getElementById('map');
-      
-      // 고양시청 부근 중심 좌표
       const goyangCenter = new kakao.maps.LatLng(37.6584, 126.8320);
       
       const options = {
@@ -110,21 +107,14 @@
         level: 6
       };
 
-      // 지도 객체 생성
       map = new kakao.maps.Map(mapContainer, options);
-
-      // 검색 및 인포윈도우 객체 생성
       ps = new kakao.maps.services.Places();
       infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
 
-      // 내 위치 파악 및 고등학교 검색 실행
       getCurrentLocation();
       searchGoyangHighSchools();
     }
 
-    /**
-     * 사용자 위치 가져오기
-     */
     function getCurrentLocation() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -138,3 +128,156 @@
               map: map
             });
           },
+          function (error) {
+            console.log('위치 권한 미허용');
+          }
+        );
+      }
+    }
+
+    function createSchoolMarkerImage(colorHex) {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+        <circle cx="17" cy="17" r="15" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>
+        <path fill="#FFFFFF" d="M17 7 L6 13 L17 19 L28 13 Z M8 15.5 V21.5 C8 24.5 12 26.5 17 26.5 C22 26.5 26 24.5 26 21.5 V15.5 L17 20 Z"/>
+      </svg>`;
+
+      const imageSrc = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+      const imageSize = new kakao.maps.Size(34, 34);
+      const imageOption = { offset: new kakao.maps.Point(17, 17) };
+
+      return new kakao.maps.MarkerImage(imageSrc, imageSize, imageOption);
+    }
+
+    function getDistrictInfo(address) {
+      if (address.includes('덕양구')) {
+        return { name: '덕양구', colorClass: 'bg-blue-100 text-blue-700 border-blue-300', hex: '#2563eb' };
+      } else if (address.includes('일산동구')) {
+        return { name: '일산동구', colorClass: 'bg-emerald-100 text-emerald-700 border-emerald-300', hex: '#059669' };
+      } else if (address.includes('일산서구')) {
+        return { name: '일산서구', colorClass: 'bg-amber-100 text-amber-700 border-amber-300', hex: '#d97706' };
+      } else {
+        return { name: '고양시', colorClass: 'bg-gray-100 text-gray-700 border-gray-300', hex: '#4b5563' };
+      }
+    }
+
+    function searchGoyangHighSchools() {
+      const statusEl = document.getElementById('status-message');
+      statusEl.innerHTML = '🔍 고양시 고등학교 정보를 불러오는 중...';
+
+      removeMarkers();
+      clearPlacesList();
+
+      const options = {
+        rect: goyangBoundsRect,
+        size: 15
+      };
+
+      ps.keywordSearch('고양시 고등학교', function(data, status) {
+        if (status === kakao.maps.services.Status.OK) {
+          const filteredPlaces = data.filter(place => {
+            const address = place.road_address_name || place.address_name;
+            return address.includes('고양시') && place.place_name.includes('고등학교');
+          });
+
+          displayPlaces(filteredPlaces);
+          statusEl.innerHTML = `<span class="text-green-600 font-medium">✓ 고양시 고등학교 ${filteredPlaces.length}곳을 찾았습니다.</span>`;
+        } else {
+          statusEl.innerHTML = '<span class="text-red-500">⚠️ 고등학교 정보를 불러오지 못했습니다.</span>';
+        }
+      }, options);
+    }
+
+    function displayPlaces(places) {
+      const listEl = document.getElementById('places-list');
+      const bounds = new kakao.maps.LatLngBounds();
+
+      if (places.length === 0) {
+        listEl.innerHTML = '<li class="p-4 text-center text-sm text-gray-400">검색된 고등학교가 없습니다.</li>';
+        return;
+      }
+
+      places.forEach((place, index) => {
+        const placePosition = new kakao.maps.LatLng(place.y, place.x);
+        const address = place.road_address_name || place.address_name;
+        
+        const district = getDistrictInfo(address);
+        const markerImage = createSchoolMarkerImage(district.hex);
+        const marker = addMarker(placePosition, markerImage);
+
+        bounds.extend(placePosition);
+
+        const itemEl = document.createElement('li');
+        itemEl.className = 'p-3 border rounded-lg hover:bg-yellow-50 cursor-pointer transition border-gray-200 bg-white shadow-sm';
+        itemEl.innerHTML = `
+          <div class="flex items-start gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-gray-700 rounded-full flex-shrink-0 mt-0.5">
+              ${index + 1}
+            </span>
+            <div class="flex-1 overflow-hidden">
+              <div class="flex items-center gap-1.5">
+                <h5 class="font-bold text-gray-800 text-sm truncate">${place.place_name}</h5>
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold border rounded ${district.colorClass}">
+                  ${district.name}
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mt-1 truncate">${address}</p>
+              ${place.phone ? `<p class="text-xs text-blue-600 mt-0.5">${place.phone}</p>` : ''}
+            </div>
+          </div>
+        `;
+
+        kakao.maps.event.addListener(marker, 'click', function () {
+          displayInfowindow(marker, place.place_name, address, district.name);
+        });
+
+        itemEl.onclick = function () {
+          map.panTo(placePosition);
+          displayInfowindow(marker, place.place_name, address, district.name);
+        };
+
+        listEl.appendChild(itemEl);
+      });
+
+      map.setBounds(bounds);
+    }
+
+    function addMarker(position, markerImage) {
+      const marker = new kakao.maps.Marker({
+        position: position,
+        image: markerImage,
+        map: map
+      });
+      markers.push(marker);
+      return marker;
+    }
+
+    function removeMarkers() {
+      markers.forEach(marker => marker.setMap(null));
+      markers = [];
+    }
+
+    function clearPlacesList() {
+      document.getElementById('places-list').innerHTML = '';
+    }
+
+    function displayInfowindow(marker, name, address, districtName) {
+      const content = `
+        <div class="custom-infowindow">
+          <div class="font-bold text-sm text-gray-800">${name} <span class="text-xs text-blue-600">(${districtName})</span></div>
+          <div class="text-xs text-gray-600 mt-1">${address}</div>
+        </div>
+      `;
+      infowindow.setContent(content);
+      infowindow.open(map, marker);
+    }
+
+    function moveToCurrentLocation() {
+      if (currentLocation) {
+        map.panTo(currentLocation);
+      } else {
+        alert('현재 위치 정보를 확인할 수 없습니다. 위치 권한을 승인해 주세요.');
+      }
+    }
+  </script>
+</body>
+</html>
