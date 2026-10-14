@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>고양시 고등학교 & 학교 카카오맵 서비스</title>
+  <title>고양시 고등학교 지도 서비스</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -29,44 +29,26 @@
   <!-- 메인 컨테이너: 좌우 2분할 레이아웃 -->
   <div class="flex h-full w-full flex-col md:flex-row">
     
-    <!-- [왼쪽 영역] 탭 + 검색 결과 리스트 -->
+    <!-- [왼쪽 영역] 헤더 + 검색 결과 리스트 -->
     <div class="w-full md:w-96 h-1/2 md:h-full bg-white flex flex-col z-10 shadow-lg border-r border-gray-200">
       
       <!-- 헤더 -->
       <div class="p-4 bg-yellow-400 border-b border-yellow-500">
         <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-          🏫 주변 학교 검색
+          🏫 고양시 고등학교 지도
         </h1>
-        <p class="text-xs text-gray-700 mt-1">내 주변 학교 및 고등학교를 빠르게 찾아보세요.</p>
-      </div>
-
-      <!-- 탭 버튼 영역 (탭 1: 전체 학교, 탭 2: 고등학교) -->
-      <div class="flex border-b border-gray-200 bg-gray-50">
-        <button 
-          id="tab-school" 
-          onclick="switchTab('SC4')" 
-          class="flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition text-center"
-        >
-          🏫 전체 학교 (SC4)
-        </button>
-        <button 
-          id="tab-highschool" 
-          onclick="switchTab('HIGH')" 
-          class="flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 transition text-center"
-        >
-          🎓 고등학교 검색
-        </button>
+        <p class="text-xs text-gray-700 mt-1">고양시에 위치한 고등학교 목록입니다.</p>
       </div>
 
       <!-- 위치 정보 상태 안내 메시지 -->
       <div id="status-message" class="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">
-        위치 정보를 가져오는 중...
+        고양시 지역 고등학교 검색 중...
       </div>
 
       <!-- 검색 결과 목록 출력 리스트 -->
       <div class="flex-1 overflow-y-auto p-2">
         <ul id="places-list" class="space-y-2">
-          <!-- JS로 검색 결과가 여기에 표시됩니다 -->
+          <!-- 고양시 고등학교 목록이 동적으로 들어옵니다 -->
         </ul>
       </div>
       
@@ -110,8 +92,11 @@
     let infowindow = null;        // 인포윈도우(팝업) 객체
     let markers = [];             // 마커 배열
     let currentLocation = null;   // 현재 위치 좌표
-    let currentCategory = 'SC4';  // 현재 선택된 탭 카테고리
     let isRoadviewActive = false; // 로드뷰 활성화 여부
+
+    // 고양시 영역 좌표 범위를 설정 (남서쪽 경도,위도 ~ 북동쪽 경도,위도)
+    // rect 형식: "swLng,swLat,neLng,neLat"
+    const goyangBoundsRect = "126.7000,37.5800,126.9600,37.7300";
 
     // SDK 로딩 오류 방지 (kakao.maps.load 사용)
     kakao.maps.load(function () {
@@ -125,35 +110,34 @@
       const mapContainer = document.getElementById('map');
       const rvContainer = document.getElementById('roadview');
       
-      // 기본 위치 (서울시청 / 위치 권한 승인 전)
-      const defaultCenter = new kakao.maps.LatLng(37.566826, 126.978656);
+      // 고양시청 근처 중심 좌표
+      const goyangCenter = new kakao.maps.LatLng(37.6584, 126.8320);
       
       const options = {
-        center: defaultCenter,
-        level: 5 // 요청하신 지도 확대 레벨 5
+        center: goyangCenter,
+        level: 6 // 고양시 전체가 잘 보이도록 확대 레벨 설정
       };
 
       // 지도 생성
       map = new kakao.maps.Map(mapContainer, options);
 
-      // 로드뷰 및 로드뷰 클라이언트 생성
+      // 로드뷰 및 서비스 객체 생성
       roadview = new kakao.maps.Roadview(rvContainer);
       roadviewClient = new kakao.maps.RoadviewClient();
-
-      // 서비스 및 인포윈도우 생성
       ps = new kakao.maps.services.Places();
       infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
 
-      // 현재 위치 요청
+      // 사용자 현재 위치 파악 시도
       getCurrentLocation();
+
+      // 고양시 고등학교 검색 시작
+      searchGoyangHighSchools();
     }
 
     /**
-     * 위치 권한 요청 및 현재 위치 가져오기
+     * 내 위치 확인 (선택 사항)
      */
     function getCurrentLocation() {
-      const statusEl = document.getElementById('status-message');
-
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           function (position) {
@@ -161,221 +145,21 @@
             const lng = position.coords.longitude;
             currentLocation = new kakao.maps.LatLng(lat, lng);
 
-            // 지도 중심을 현재 위치로 이동
-            map.setCenter(currentLocation);
-
-            // 현재 위치 마커 추가
+            // 현재 위치 마커 표시
             new kakao.maps.Marker({
               position: currentLocation,
               map: map
             });
-
-            statusEl.innerHTML = '<span class="text-green-600 font-medium">✓ 현재 위치를 중심으로 검색합니다.</span>';
-            
-            // 현재 위치 기반으로 첫 번째 탭 검색 실행
-            searchPlacesByCategory();
           },
           function (error) {
-            statusEl.innerHTML = '<span class="text-red-500">⚠️ 위치 권한 미허용 (기본 위치로 검색합니다)</span>';
-            currentLocation = map.getCenter();
-            searchPlacesByCategory();
+            console.log('위치 권한 미허용');
           }
         );
-      } else {
-        statusEl.innerHTML = '<span class="text-red-500">⚠️ 이 브라우저는 Geolocation을 지원하지 않습니다.</span>';
-        currentLocation = map.getCenter();
-        searchPlacesByCategory();
       }
     }
 
     /**
-     * 탭 전환 처리 함수
+     * 고양시 내의 고등학교 검색
      */
-    function switchTab(category) {
-      currentCategory = category;
-
-      // 탭 스타일 변경
-      const tabSchool = document.getElementById('tab-school');
-      const tabHighschool = document.getElementById('tab-highschool');
-
-      if (category === 'SC4') {
-        tabSchool.className = "flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition text-center";
-        tabHighschool.className = "flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 transition text-center";
-      } else {
-        tabHighschool.className = "flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition text-center";
-        tabSchool.className = "flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 transition text-center";
-      }
-
-      // 탭 변경 시 기존 마커 및 데이터 삭제 후 재검색
-      searchPlacesByCategory();
-    }
-
-    /**
-     * 선택된 탭 카테고리에 따라 장소 검색
-     */
-    function searchPlacesByCategory() {
-      if (!currentLocation) currentLocation = map.getCenter();
-
-      // 기존 마커 및 목록 제거
-      removeMarkers();
-      clearPlacesList();
-      if (infowindow) infowindow.close();
-
-      const searchOptions = {
-        location: currentLocation,
-        radius: 4000 // 중심 좌표 기준 4km 이내 검색
-      };
-
-      if (currentCategory === 'SC4') {
-        // 카테고리 검색 (SC4: 학교)
-        ps.categorySearch('SC4', placesSearchCB, searchOptions);
-      } else {
-        // 키워드 검색 (고등학교)
-        ps.keywordSearch('고등학교', placesSearchCB, searchOptions);
-      }
-    }
-
-    /**
-     * 검색 완료 콜백 함수
-     */
-    function placesSearchCB(data, status) {
-      if (status === kakao.maps.services.Status.OK) {
-        displayPlaces(data);
-      } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
-        alert('주변에 검색된 장소가 없습니다.');
-      } else {
-        alert('검색 중 오류가 발생했습니다.');
-      }
-    }
-
-    /**
-     * 검색 결과(마커 및 리스트)를 화면에 표시
-     */
-    function displayPlaces(places) {
-      const listEl = document.getElementById('places-list');
-      const bounds = new kakao.maps.LatLngBounds();
-
-      places.forEach((place, index) => {
-        const placePosition = new kakao.maps.LatLng(place.y, place.x);
-        const marker = addMarker(placePosition);
-
-        bounds.extend(placePosition);
-
-        // 리스트 항목 생성
-        const itemEl = document.createElement('li');
-        itemEl.className = 'p-3 border rounded-lg hover:bg-yellow-50 cursor-pointer transition border-gray-200 bg-white shadow-sm';
-        itemEl.innerHTML = `
-          <div class="flex items-start gap-2">
-            <span class="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-500 rounded-full flex-shrink-0 mt-0.5">
-              ${index + 1}
-            </span>
-            <div class="flex-1 overflow-hidden">
-              <h5 class="font-bold text-gray-800 text-sm truncate">${place.place_name}</h5>
-              <p class="text-xs text-gray-500 mt-1 truncate">${place.road_address_name || place.address_name}</p>
-              ${place.phone ? `<p class="text-xs text-blue-600 mt-0.5">${place.phone}</p>` : ''}
-            </div>
-          </div>
-        `;
-
-        // 마커 및 리스트 클릭 시 팝업(인포윈도우) 표시
-        const address = place.road_address_name || place.address_name;
-        
-        kakao.maps.event.addListener(marker, 'click', function () {
-          displayInfowindow(marker, place.place_name, address);
-        });
-
-        itemEl.onclick = function () {
-          map.panTo(placePosition);
-          displayInfowindow(marker, place.place_name, address);
-        };
-
-        listEl.appendChild(itemEl);
-      });
-
-      map.setBounds(bounds);
-    }
-
-    /**
-     * 마커 생성 함수
-     */
-    function addMarker(position) {
-      const marker = new kakao.maps.Marker({
-        position: position,
-        map: map
-      });
-      markers.push(marker);
-      return marker;
-    }
-
-    /**
-     * 마커 제거 함수
-     */
-    function removeMarkers() {
-      markers.forEach(marker => marker.setMap(null));
-      markers = [];
-    }
-
-    /**
-     * 검색 리스트 초기화 함수
-     */
-    function clearPlacesList() {
-      document.getElementById('places-list').innerHTML = '';
-    }
-
-    /**
-     * 마커 클릭 시 팝업(인포윈도우) 표시 함수
-     */
-    function displayInfowindow(marker, name, address) {
-      const content = `
-        <div class="custom-infowindow">
-          <div class="font-bold text-sm text-gray-800">${name}</div>
-          <div class="text-xs text-gray-600 mt-1">${address}</div>
-        </div>
-      `;
-      infowindow.setContent(content);
-      infowindow.open(map, marker);
-    }
-
-    /**
-     * 현재 위치 버튼 클릭 시 지도 이동
-     */
-    function moveToCurrentLocation() {
-      if (currentLocation) {
-        map.panTo(currentLocation);
-      } else {
-        getCurrentLocation();
-      }
-    }
-
-    /**
-     * 로드뷰 토글 (지도 <-> 로드뷰 전환)
-     */
-    function toggleRoadview() {
-      const rvContainer = document.getElementById('roadview');
-      const btnText = document.getElementById('roadview-btn-text');
-
-      if (!isRoadviewActive) {
-        // 지도 중심 좌표 근처의 파노라마 ID를 가져와서 로드뷰 실행
-        const center = map.getCenter();
-        roadviewClient.getNearestPanoId(center, 50, function (panoId) {
-          if (panoId) {
-            roadview.setPanoId(panoId, center);
-            rvContainer.classList.remove('hidden');
-            btnText.innerText = '지도 보기';
-            isRoadviewActive = true;
-          } else {
-            alert('이 위치 주변에는 제공되는 로드뷰가 없습니다.');
-          }
-        });
-      } else {
-        // 로드뷰 닫기
-        rvContainer.classList.add('hidden');
-        btnText.innerText = '로드뷰 보기';
-        isRoadviewActive = false;
-      }
-    }
-  </script>
-</body>
-</html>
-
-```
+    function searchGoyangHighSchools() {
+      const statusEl = document.getElementById('status-message');
