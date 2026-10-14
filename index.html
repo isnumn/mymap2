@@ -8,8 +8,8 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- 카카오 지도 JavaScript SDK -->
-  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=80bbf22d0111456cf471556fa6f0b270&libraries=services&autoload=false"></script>
+  <!-- 카카오 지도 JavaScript SDK (autoload 제거로 자동 로드) -->
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=80bbf22d0111456cf471556fa6f0b270&libraries=services"></script>
   
   <style>
     /* 카카오맵 인포윈도우 커스텀 스타일 */
@@ -90,7 +90,7 @@
 
     var goyangBoundsRect = "126.7000,37.5800,126.9600,37.7300";
 
-    // 현재 위치 이동 전역 함수
+    // 현재 위치 이동
     function moveToCurrentLocation() {
       if (currentLocation && map) {
         map.panTo(currentLocation);
@@ -99,15 +99,7 @@
       }
     }
 
-    // 카카오 SDK 로드 완료 후 실행
-    if (window.kakao && window.kakao.maps) {
-      kakao.maps.load(function() {
-        initMap();
-      });
-    } else {
-      document.getElementById('status-message').innerHTML = '<span class="text-red-500 font-bold">⚠️ 카카오 지도 SDK 로드 실패</span>';
-    }
-
+    // 지도 초기화 실행 함수
     function initMap() {
       var mapContainer = document.getElementById('map');
       var goyangCenter = new kakao.maps.LatLng(37.6584, 126.8320);
@@ -137,7 +129,7 @@
         getCurrentLocation();
       } catch (e) {
         console.error(e);
-        document.getElementById('status-message').innerHTML = '<span class="text-red-500 font-bold">⚠️ 지도 생성 오류 발생</span>';
+        document.getElementById('status-message').innerHTML = '<span class="text-red-500 font-bold">⚠️ 지도 생성 오류가 발생했습니다.</span>';
       }
     }
 
@@ -163,4 +155,164 @@
 
     function createSchoolMarkerImage(colorHex) {
       var svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
-        <circle cx="
+        <circle cx="17" cy="17" r="15" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>
+        <path fill="#FFFFFF" d="M17 7 L6 13 L17 19 L28 13 Z M8 15.5 V21.5 C8 24.5 12 26.5 17 26.5 C22 26.5 26 24.5 26 21.5 V15.5 L17 20 Z"/>
+      </svg>`;
+
+      var imageSrc = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+      var imageSize = new kakao.maps.Size(34, 34);
+      var imageOption = { offset: new kakao.maps.Point(17, 17) };
+
+      return new kakao.maps.MarkerImage(imageSrc, imageSize, imageOption);
+    }
+
+    function getDistrictInfo(address) {
+      if (address.includes('덕양구')) {
+        return { name: '덕양구', colorClass: 'bg-blue-100 text-blue-700 border-blue-300', hex: '#2563eb' };
+      } else if (address.includes('일산동구')) {
+        return { name: '일산동구', colorClass: 'bg-emerald-100 text-emerald-700 border-emerald-300', hex: '#059669' };
+      } else if (address.includes('일산서구')) {
+        return { name: '일산서구', colorClass: 'bg-amber-100 text-amber-700 border-amber-300', hex: '#d97706' };
+      } else {
+        return { name: '고양시', colorClass: 'bg-gray-100 text-gray-700 border-gray-300', hex: '#4b5563' };
+      }
+    }
+
+    function searchGoyangHighSchoolsAllPages() {
+      var statusEl = document.getElementById('status-message');
+      statusEl.innerHTML = '🔍 고양시 전체 고등학교 검색 중...';
+
+      removeMarkers();
+      clearPlacesList();
+      allHighSchools = [];
+
+      var options = {
+        rect: goyangBoundsRect,
+        size: 15
+      };
+
+      function placesSearchCB(data, status, pagination) {
+        if (status === kakao.maps.services.Status.OK) {
+          var filtered = data.filter(function(place) {
+            var address = place.road_address_name || place.address_name;
+            return address.includes('고양시') && place.place_name.includes('고등학교');
+          });
+
+          filtered.forEach(function(item) {
+            if (!allHighSchools.some(function(p) { return p.id === item.id; })) {
+              allHighSchools.push(item);
+            }
+          });
+
+          if (pagination.hasNextPage) {
+            pagination.nextPage();
+          } else {
+            allHighSchools.sort(function(a, b) {
+              return a.place_name.localeCompare(b.place_name, 'ko');
+            });
+            displayPlaces(allHighSchools);
+            statusEl.innerHTML = '<span class="text-green-600 font-medium">✓ 고양시 고등학교 총 ' + allHighSchools.length + '곳을 찾았습니다.</span>';
+          }
+        } else {
+          statusEl.innerHTML = '<span class="text-red-500">⚠️ 고등학교 정보를 불러오지 못했습니다.</span>';
+        }
+      }
+
+      ps.keywordSearch('고양시 고등학교', placesSearchCB, options);
+    }
+
+    function displayPlaces(places) {
+      var listEl = document.getElementById('places-list');
+      var bounds = new kakao.maps.LatLngBounds();
+
+      if (places.length === 0) {
+        listEl.innerHTML = '<li class="p-4 text-center text-sm text-gray-400">검색된 고등학교가 없습니다.</li>';
+        return;
+      }
+
+      places.forEach(function(place, index) {
+        var placePosition = new kakao.maps.LatLng(place.y, place.x);
+        var address = place.road_address_name || place.address_name;
+        
+        var district = getDistrictInfo(address);
+        var markerImage = createSchoolMarkerImage(district.hex);
+        var marker = addMarker(placePosition, markerImage);
+
+        bounds.extend(placePosition);
+
+        var itemEl = document.createElement('li');
+        itemEl.className = 'p-3 border rounded-lg hover:bg-yellow-50 cursor-pointer transition border-gray-200 bg-white shadow-sm';
+        itemEl.innerHTML = `
+          <div class="flex items-start gap-2">
+            <span class="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-gray-700 rounded-full flex-shrink-0 mt-0.5">
+              ${index + 1}
+            </span>
+            <div class="flex-1 overflow-hidden">
+              <div class="flex items-center gap-1.5">
+                <h5 class="font-bold text-gray-800 text-sm truncate">${place.place_name}</h5>
+                <span class="px-1.5 py-0.5 text-[10px] font-semibold border rounded ${district.colorClass}">
+                  ${district.name}
+                </span>
+              </div>
+              <p class="text-xs text-gray-500 mt-1 truncate">${address}</p>
+              ${place.phone ? `<p class="text-xs text-blue-600 mt-0.5">${place.phone}</p>` : ''}
+            </div>
+          </div>
+        `;
+
+        kakao.maps.event.addListener(marker, 'click', function () {
+          displayInfowindow(marker, place.place_name, address, district.name);
+        });
+
+        itemEl.onclick = function () {
+          map.panTo(placePosition);
+          displayInfowindow(marker, place.place_name, address, district.name);
+        };
+
+        listEl.appendChild(itemEl);
+      });
+
+      map.setBounds(bounds);
+    }
+
+    function addMarker(position, markerImage) {
+      var marker = new kakao.maps.Marker({
+        position: position,
+        image: markerImage,
+        map: map
+      });
+      markers.push(marker);
+      return marker;
+    }
+
+    function removeMarkers() {
+      markers.forEach(function(marker) { marker.setMap(null); });
+      markers = [];
+    }
+
+    function clearPlacesList() {
+      document.getElementById('places-list').innerHTML = '';
+    }
+
+    function displayInfowindow(marker, name, address, districtName) {
+      var content = `
+        <div class="custom-infowindow">
+          <div class="font-bold text-sm text-gray-800">${name} <span class="text-xs text-blue-600">(${districtName})</span></div>
+          <div class="text-xs text-gray-600 mt-1">${address}</div>
+        </div>
+      `;
+      infowindow.setContent(content);
+      infowindow.open(map, marker);
+    }
+
+    // HTML 요소 로드 후 지도 초기화
+    window.onload = function() {
+      if (window.kakao && window.kakao.maps) {
+        initMap();
+      } else {
+        document.getElementById('status-message').innerHTML = '<span class="text-red-500 font-bold">⚠️ 카카오 지도 SDK 로드 실패</span>';
+      }
+    };
+  </script>
+</body>
+</html>
