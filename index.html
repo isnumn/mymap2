@@ -8,6 +8,9 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
+  <!-- 카카오 지도 JavaScript SDK (직접 로드) -->
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=80bbf22d0111456cf471556fa6f0b270&libraries=services&autoload=false"></script>
+  
   <style>
     /* 카카오맵 인포윈도우 커스텀 스타일 */
     .custom-infowindow {
@@ -46,7 +49,7 @@
 
       <!-- 위치 정보 상태 안내 메시지 -->
       <div id="status-message" class="px-4 py-1.5 text-xs text-gray-500 bg-white border-b border-gray-100">
-        카카오 지도 SDK 연결 중...
+        지도 불러오는 중...
       </div>
 
       <!-- 검색 결과 목록 출력 리스트 -->
@@ -76,36 +79,25 @@
 
   </div>
 
-  <!-- JavaScript 연동 (동적 SDK 스크립트 주입) -->
+  <!-- JavaScript 연동 -->
   <script>
     let map = null;
     let ps = null;
     let infowindow = null;
     let markers = [];
     let currentLocation = null;
-    let allHighSchools = []; // 전체 검색 결과를 누적할 배열
+    let allHighSchools = [];
 
-    const APP_KEY = "80bbf22d0111456cf471556fa6f0b270";
     const goyangBoundsRect = "126.7000,37.5800,126.9600,37.7300";
 
-    function loadKakaoSdk() {
-      const script = document.createElement('script');
-      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${APP_KEY}&libraries=services&autoload=false`;
-      
-      script.onload = () => {
-        kakao.maps.load(() => {
-          initMap();
-        });
-      };
-
-      script.onerror = () => {
-        document.getElementById('status-message').innerHTML = '<span class="text-red-500 font-bold">⚠️ Kakao SDK 로드 실패!</span>';
-      };
-
-      document.head.appendChild(script);
+    // 카카오 SDK 로드 완료 후 실행
+    if (window.kakao && window.kakao.maps) {
+      kakao.maps.load(function() {
+        initMap();
+      });
+    } else {
+      document.getElementById('status-message').innerHTML = '<span class="text-red-500 font-bold">⚠️ 카카오 지도 SDK 로드 실패</span>';
     }
-
-    window.addEventListener('DOMContentLoaded', loadKakaoSdk);
 
     function initMap() {
       const mapContainer = document.getElementById('map');
@@ -124,68 +116,9 @@
         setTimeout(() => {
           map.relayout();
           map.setCenter(goyangCenter);
-        }, 200);
+        }, 300);
 
-        // 고양시 고등학교 전체 검색 실행 (다중 페이지 수집)
+        // 고양시 고등학교 전체 페이징 검색 시작
         searchGoyangHighSchoolsAllPages();
         getCurrentLocation();
       } catch (e) {
-        console.error(e);
-      }
-    }
-
-    function getCurrentLocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          function (position) {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            currentLocation = new kakao.maps.LatLng(lat, lng);
-
-            new kakao.maps.Marker({
-              position: currentLocation,
-              map: map
-            });
-          },
-          function (error) {
-            console.log('위치 권한 미허용');
-          }
-        );
-      }
-    }
-
-    function createSchoolMarkerImage(colorHex) {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
-        <circle cx="17" cy="17" r="15" fill="${colorHex}" stroke="#FFFFFF" stroke-width="2"/>
-        <path fill="#FFFFFF" d="M17 7 L6 13 L17 19 L28 13 Z M8 15.5 V21.5 C8 24.5 12 26.5 17 26.5 C22 26.5 26 24.5 26 21.5 V15.5 L17 20 Z"/>
-      </svg>`;
-
-      const imageSrc = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
-      const imageSize = new kakao.maps.Size(34, 34);
-      const imageOption = { offset: new kakao.maps.Point(17, 17) };
-
-      return new kakao.maps.MarkerImage(imageSrc, imageSize, imageOption);
-    }
-
-    function getDistrictInfo(address) {
-      if (address.includes('덕양구')) {
-        return { name: '덕양구', colorClass: 'bg-blue-100 text-blue-700 border-blue-300', hex: '#2563eb' };
-      } else if (address.includes('일산동구')) {
-        return { name: '일산동구', colorClass: 'bg-emerald-100 text-emerald-700 border-emerald-300', hex: '#059669' };
-      } else if (address.includes('일산서구')) {
-        return { name: '일산서구', colorClass: 'bg-amber-100 text-amber-700 border-amber-300', hex: '#d97706' };
-      } else {
-        return { name: '고양시', colorClass: 'bg-gray-100 text-gray-700 border-gray-300', hex: '#4b5563' };
-      }
-    }
-
-    /**
-     * 카카오 검색 API의 페이징(Pagination)을 모두 순회하여 전체 고등학교를 수집
-     */
-    function searchGoyangHighSchoolsAllPages() {
-      const statusEl = document.getElementById('status-message');
-      statusEl.innerHTML = '🔍 고양시 전체 고등학교 검색 중...';
-
-      removeMarkers();
-      clearPlacesList();
-      allHighSchools = []; //
