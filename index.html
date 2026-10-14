@@ -1,11 +1,20 @@
+이전에 "이 확장 프로그램을 사용 설정하려면..."이라는 메시지가 나와서 당황하셨죠!
+
+해당 오류는 제가 이전 답변에서 Github 링크(`mymap2/index.html...`)를 읽으려고 시도할 때 발생한 **내부 시스템 연결 오류** 때문이었습니다. 제가 직접 외부 웹 주소(Github)에 있는 코드를 바로 불러올 수 있는 권한이 없어서 발생한 문제였습니다.
+
+---
+
+요청하신 탭 기능(학교 SC4 카카오 카테고리 검색 + 원하는 탭), 로드뷰(Roadview), 현재 위치 버튼 및 팝업(인포윈도우)을 모두 포함하여 완전하게 새로 업데이트한 **`index.html` 전체 소스 코드**를 준비했습니다! 아래 코드를 그대로 복사해서 사용하시면 됩니다.
+
+```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>카카오맵 장소 검색 서비스</title>
+  <title>고양시 고등학교 & 학교 카카오맵 서비스</title>
   
-  <!-- Tailwind CSS CDN (화면 레이아웃 및 스타일용) -->
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- 카카오 지도 JavaScript SDK (appkey 및 libraries 포함) -->
@@ -14,14 +23,13 @@
   <style>
     /* 카카오맵 인포윈도우 커스텀 스타일 */
     .custom-infowindow {
-      padding: 8px 12px;
+      padding: 10px 14px;
       font-size: 13px;
-      font-weight: bold;
-      color: #333;
-      background: #fff;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border: 1px solid #e5e7eb;
+      min-width: 180px;
     }
   </style>
 </head>
@@ -30,51 +38,73 @@
   <!-- 메인 컨테이너: 좌우 2분할 레이아웃 -->
   <div class="flex h-full w-full flex-col md:flex-row">
     
-    <!-- [왼쪽 영역] 검색창 및 검색 결과 리스트 -->
+    <!-- [왼쪽 영역] 탭 + 검색 결과 리스트 -->
     <div class="w-full md:w-96 h-1/2 md:h-full bg-white flex flex-col z-10 shadow-lg border-r border-gray-200">
       
-      <!-- 헤더 및 검색 폼 -->
+      <!-- 헤더 -->
       <div class="p-4 bg-yellow-400 border-b border-yellow-500">
         <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-          📍 장소 검색 서비스
+          🏫 주변 학교 검색
         </h1>
-        <form id="search-form" class="mt-3 flex gap-2">
-          <input 
-            type="text" 
-            id="keyword-input" 
-            placeholder="검색어를 입력하세요 (예: 강남역 맛집)" 
-            class="flex-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
-            required
-          />
-          <button 
-            type="submit" 
-            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition shadow-sm"
-          >
-            검색
-          </button>
-        </form>
+        <p class="text-xs text-gray-700 mt-1">내 주변 학교 및 고등학교를 빠르게 찾아보세요.</p>
+      </div>
+
+      <!-- 탭 버튼 영역 (탭 1: 전체 학교, 탭 2: 고등학교) -->
+      <div class="flex border-b border-gray-200 bg-gray-50">
+        <button 
+          id="tab-school" 
+          onclick="switchTab('SC4')" 
+          class="flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition text-center"
+        >
+          🏫 전체 학교 (SC4)
+        </button>
+        <button 
+          id="tab-highschool" 
+          onclick="switchTab('HIGH')" 
+          class="flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 transition text-center"
+        >
+          🎓 고등학교 검색
+        </button>
       </div>
 
       <!-- 위치 정보 상태 안내 메시지 -->
-      <div id="status-message" class="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-        <span>위치 정보를 가져오는 중...</span>
+      <div id="status-message" class="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-b border-gray-100">
+        위치 정보를 가져오는 중...
       </div>
 
       <!-- 검색 결과 목록 출력 리스트 -->
       <div class="flex-1 overflow-y-auto p-2">
         <ul id="places-list" class="space-y-2">
-          <!-- JS로 검색 결과 항목들이 여기에 동적으로 생성됩니다 -->
-          <li class="p-4 text-center text-sm text-gray-400">
-            검색어를 입력하고 검색 버튼을 눌러주세요.
-          </li>
+          <!-- JS로 검색 결과가 여기에 표시됩니다 -->
         </ul>
       </div>
       
     </div>
 
-    <!-- [오른쪽 영역] 카카오 지도 표시 영역 -->
+    <!-- [오른쪽 영역] 카카오 지도 및 로드뷰 영역 -->
     <div class="flex-1 h-1/2 md:h-full relative">
+      <!-- 지도 컨테이너 -->
       <div id="map" class="w-full h-full"></div>
+
+      <!-- 로드뷰 컨테이너 (기본은 숨김 처리) -->
+      <div id="roadview" class="w-full h-full absolute top-0 left-0 hidden z-20"></div>
+
+      <!-- 지도/로드뷰 전환 버튼 & 현재위치 버튼 -->
+      <div class="absolute top-4 right-4 z-30 flex flex-col gap-2">
+        <button 
+          onclick="toggleRoadview()" 
+          id="btn-roadview"
+          class="bg-white hover:bg-gray-100 text-gray-800 font-bold px-3 py-2 rounded-lg shadow-md border border-gray-300 text-xs flex items-center gap-1"
+        >
+          🛣️ <span id="roadview-btn-text">로드뷰 보기</span>
+        </button>
+        <button 
+          onclick="moveToCurrentLocation()" 
+          class="bg-white hover:bg-gray-100 text-gray-800 font-bold px-3 py-2 rounded-lg shadow-md border border-gray-300 text-xs flex items-center gap-1"
+        >
+          🎯 현재 위치
+        </button>
+      </div>
     </div>
 
   </div>
@@ -82,24 +112,29 @@
   <!-- JavaScript 연동 -->
   <script>
     // 전역 변수 선언
-    let map = null;              // 지도 객체
-    let ps = null;               // 카카오 장소 검색 객체
-    let infowindow = null;       // 인포윈도우(말풍선) 객체
-    let markers = [];            // 생성된 마커들을 관리하는 배열
-    let currentLocation = null;  // 현재 사용자의 위치 (경도/위도 좌표)
+    let map = null;               // 지도 객체
+    let roadview = null;         // 로드뷰 객체
+    let roadviewClient = null;   // 로드뷰 서비스 객체
+    let ps = null;                // 장소 검색 객체
+    let infowindow = null;        // 인포윈도우(팝업) 객체
+    let markers = [];             // 마커 배열
+    let currentLocation = null;   // 현재 위치 좌표
+    let currentCategory = 'SC4';  // 현재 선택된 탭 카테고리
+    let isRoadviewActive = false; // 로드뷰 활성화 여부
 
-    // SDK가 안전하게 완전 로드된 후 실행되도록 kakao.maps.load 사용 (로딩 오류 방지)
+    // SDK 로딩 오류 방지 (kakao.maps.load 사용)
     kakao.maps.load(function () {
       initMap();
     });
 
     /**
-     * 지도 및 서비스 초기화 함수
+     * 지도, 로드뷰 및 서비스 초기화
      */
     function initMap() {
-      const container = document.getElementById('map');
+      const mapContainer = document.getElementById('map');
+      const rvContainer = document.getElementById('roadview');
       
-      // 기본 중심 좌표 (위치 권한을 받기 전 기본값: 서울시청)
+      // 기본 위치 (서울시청 / 위치 권한 승인 전)
       const defaultCenter = new kakao.maps.LatLng(37.566826, 126.978656);
       
       const options = {
@@ -107,29 +142,23 @@
         level: 5 // 요청하신 지도 확대 레벨 5
       };
 
-      // 지도 객체 생성
-      map = new kakao.maps.Map(container, options);
+      // 지도 생성
+      map = new kakao.maps.Map(mapContainer, options);
 
-      // 장소 검색 객체 및 인포윈도우 생성
+      // 로드뷰 및 로드뷰 클라이언트 생성
+      roadview = new kakao.maps.Roadview(rvContainer);
+      roadviewClient = new kakao.maps.RoadviewClient();
+
+      // 서비스 및 인포윈도우 생성
       ps = new kakao.maps.services.Places();
       infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
 
-      // 지도 컨트롤 추가 (확대/축소)
-      const zoomControl = new kakao.maps.ZoomControl();
-      map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
-
-      // 사용자 현재 위치 가져오기
+      // 현재 위치 요청
       getCurrentLocation();
-
-      // 검색 폼 이벤트 리스너 등록
-      document.getElementById('search-form').addEventListener('submit', function (e) {
-        e.preventDefault();
-        searchPlaces();
-      });
     }
 
     /**
-     * HTML5 Geolocation을 사용하여 현재 위치 권한을 확인하고 지도의 중심을 이동하는 함수
+     * 위치 권한 요청 및 현재 위치 가져오기
      */
     function getCurrentLocation() {
       const statusEl = document.getElementById('status-message');
@@ -144,90 +173,104 @@
             // 지도 중심을 현재 위치로 이동
             map.setCenter(currentLocation);
 
-            // 현재 위치에 표시할 마커 생성
-            const marker = new kakao.maps.Marker({
+            // 현재 위치 마커 추가
+            new kakao.maps.Marker({
               position: currentLocation,
               map: map
             });
 
-            // 현재 위치 표시 말풍선 생성
-            const customOverlay = new kakao.maps.CustomOverlay({
-              map: map,
-              position: currentLocation,
-              content: '<div class="custom-infowindow">📍 현재 위치</div>',
-              yAnchor: 2.3
-            });
-
-            statusEl.innerHTML = '<span class="text-green-600 font-medium">✓ 현재 위치를 확인했습니다.</span>';
+            statusEl.innerHTML = '<span class="text-green-600 font-medium">✓ 현재 위치를 중심으로 검색합니다.</span>';
+            
+            // 현재 위치 기반으로 첫 번째 탭 검색 실행
+            searchPlacesByCategory();
           },
           function (error) {
-            console.warn('Geolocation 실패:', error.message);
-            statusEl.innerHTML = '<span class="text-red-500">⚠️ 위치 권한을 허용하지 않아 기본 위치로 표시합니다.</span>';
+            statusEl.innerHTML = '<span class="text-red-500">⚠️ 위치 권한 미허용 (기본 위치로 검색합니다)</span>';
+            currentLocation = map.getCenter();
+            searchPlacesByCategory();
           }
         );
       } else {
         statusEl.innerHTML = '<span class="text-red-500">⚠️ 이 브라우저는 Geolocation을 지원하지 않습니다.</span>';
+        currentLocation = map.getCenter();
+        searchPlacesByCategory();
       }
     }
 
     /**
-     * 입력한 키워드로 장소를 검색하는 함수
+     * 탭 전환 처리 함수
      */
-    function searchPlaces() {
-      const keyword = document.getElementById('keyword-input').value.trim();
+    function switchTab(category) {
+      currentCategory = category;
 
-      if (!keyword) {
-        alert('검색어를 입력해 주세요!');
-        return;
+      // 탭 스타일 변경
+      const tabSchool = document.getElementById('tab-school');
+      const tabHighschool = document.getElementById('tab-highschool');
+
+      if (category === 'SC4') {
+        tabSchool.className = "flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition text-center";
+        tabHighschool.className = "flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 transition text-center";
+      } else {
+        tabHighschool.className = "flex-1 py-3 text-sm font-semibold text-blue-600 border-b-2 border-blue-600 transition text-center";
+        tabSchool.className = "flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 transition text-center";
       }
 
-      // 검색 옵션 설정 (현재 위치가 있다면 현재 위치 중심으로 우선 검색)
-      const searchOptions = {};
-      if (currentLocation) {
-        searchOptions.location = currentLocation;
-        searchOptions.radius = 5000; // 반경 5km 이내
-      }
-
-      // 카카오 키워드 검색 API 호출
-      ps.keywordSearch(keyword, placesSearchCB, searchOptions);
+      // 탭 변경 시 기존 마커 및 데이터 삭제 후 재검색
+      searchPlacesByCategory();
     }
 
     /**
-     * 장소 검색 완료 시 호출되는 콜백 함수
+     * 선택된 탭 카테고리에 따라 장소 검색
+     */
+    function searchPlacesByCategory() {
+      if (!currentLocation) currentLocation = map.getCenter();
+
+      // 기존 마커 및 목록 제거
+      removeMarkers();
+      clearPlacesList();
+      if (infowindow) infowindow.close();
+
+      const searchOptions = {
+        location: currentLocation,
+        radius: 4000 // 중심 좌표 기준 4km 이내 검색
+      };
+
+      if (currentCategory === 'SC4') {
+        // 카테고리 검색 (SC4: 학교)
+        ps.categorySearch('SC4', placesSearchCB, searchOptions);
+      } else {
+        // 키워드 검색 (고등학교)
+        ps.keywordSearch('고등학교', placesSearchCB, searchOptions);
+      }
+    }
+
+    /**
+     * 검색 완료 콜백 함수
      */
     function placesSearchCB(data, status) {
       if (status === kakao.maps.services.Status.OK) {
-        // 기존 마커 제거 및 목록 갱신
         displayPlaces(data);
       } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
-        alert('검색 결과가 존재하지 않습니다.');
-        clearPlacesList();
-      } else if (status === kakao.maps.services.Status.ERROR) {
-        alert('검색 결과 중 오류가 발생했습니다.');
+        alert('주변에 검색된 장소가 없습니다.');
+      } else {
+        alert('검색 중 오류가 발생했습니다.');
       }
     }
 
     /**
-     * 검색 결과를 리스트 및 마커로 지도에 표시하는 함수
+     * 검색 결과(마커 및 리스트)를 화면에 표시
      */
     function displayPlaces(places) {
       const listEl = document.getElementById('places-list');
       const bounds = new kakao.maps.LatLngBounds();
 
-      // 기존 마커 및 목록 제거
-      removeMarkers();
-      clearPlacesList();
-
       places.forEach((place, index) => {
         const placePosition = new kakao.maps.LatLng(place.y, place.x);
+        const marker = addMarker(placePosition);
 
-        // 마커 생성 및 지도에 표시
-        const marker = addMarker(placePosition, index);
-
-        // 검색 영역 확장을 위한 좌표 범위 추가
         bounds.extend(placePosition);
 
-        // 리스트 아이템 HTML 요소 생성
+        // 리스트 항목 생성
         const itemEl = document.createElement('li');
         itemEl.className = 'p-3 border rounded-lg hover:bg-yellow-50 cursor-pointer transition border-gray-200 bg-white shadow-sm';
         itemEl.innerHTML = `
@@ -243,55 +286,38 @@
           </div>
         `;
 
-        // 마커 및 리스트 항목 클릭/마우스오버 이벤트 등록
-        (function (marker, title, placePosition) {
-          // 마우스 오버 시 말풍선
-          kakao.maps.event.addListener(marker, 'mouseover', function () {
-            displayInfowindow(marker, title);
-          });
+        // 마커 및 리스트 클릭 시 팝업(인포윈도우) 표시
+        const address = place.road_address_name || place.address_name;
+        
+        kakao.maps.event.addListener(marker, 'click', function () {
+          displayInfowindow(marker, place.place_name, address);
+        });
 
-          // 마우스 아웃 시 말풍선 닫기
-          kakao.maps.event.addListener(marker, 'mouseout', function () {
-            infowindow.close();
-          });
-
-          // 리스트 항목 클릭 시 해당 위치로 이동 및 말풍선 표시
-          itemEl.onclick = function () {
-            map.panTo(placePosition);
-            displayInfowindow(marker, title);
-          };
-
-          // 리스트 항목 마우스오버 이벤트
-          itemEl.onmouseover = function () {
-            displayInfowindow(marker, title);
-          };
-          itemEl.onmouseout = function () {
-            infowindow.close();
-          };
-        })(marker, place.place_name, placePosition);
+        itemEl.onclick = function () {
+          map.panTo(placePosition);
+          displayInfowindow(marker, place.place_name, address);
+        };
 
         listEl.appendChild(itemEl);
       });
 
-      // 검색된 장소들이 모두 보이도록 지도 범위 재설정
       map.setBounds(bounds);
     }
 
     /**
-     * 지도에 마커를 생성하는 함수
+     * 마커 생성 함수
      */
-    function addMarker(position, idx) {
+    function addMarker(position) {
       const marker = new kakao.maps.Marker({
         position: position,
         map: map
       });
-
       markers.push(marker);
       return marker;
     }
 
     /**
-     * 지도상의 모든 마커를 제거하는 함수
+     * 마커 제거 함수
      */
     function removeMarkers() {
       markers.forEach(marker => marker.setMap(null));
@@ -299,21 +325,66 @@
     }
 
     /**
-     * 검색 결과 리스트를 초기화하는 함수
+     * 검색 리스트 초기화 함수
      */
     function clearPlacesList() {
-      const listEl = document.getElementById('places-list');
-      listEl.innerHTML = '';
+      document.getElementById('places-list').innerHTML = '';
     }
 
     /**
-     * 마커 위에 장소명을 표시하는 인포윈도우(말풍선) 함수
+     * 마커 클릭 시 팝업(인포윈도우) 표시 함수
      */
-    function displayInfowindow(marker, title) {
-      const content = `<div class="p-2 text-xs font-semibold text-gray-800">${title}</div>`;
+    function displayInfowindow(marker, name, address) {
+      const content = `
+        <div class="custom-infowindow">
+          <div class="font-bold text-sm text-gray-800">${name}</div>
+          <div class="text-xs text-gray-600 mt-1">${address}</div>
+        </div>
+      `;
       infowindow.setContent(content);
       infowindow.open(map, marker);
+    }
+
+    /**
+     * 현재 위치 버튼 클릭 시 지도 이동
+     */
+    function moveToCurrentLocation() {
+      if (currentLocation) {
+        map.panTo(currentLocation);
+      } else {
+        getCurrentLocation();
+      }
+    }
+
+    /**
+     * 로드뷰 토글 (지도 <-> 로드뷰 전환)
+     */
+    function toggleRoadview() {
+      const rvContainer = document.getElementById('roadview');
+      const btnText = document.getElementById('roadview-btn-text');
+
+      if (!isRoadviewActive) {
+        // 지도 중심 좌표 근처의 파노라마 ID를 가져와서 로드뷰 실행
+        const center = map.getCenter();
+        roadviewClient.getNearestPanoId(center, 50, function (panoId) {
+          if (panoId) {
+            roadview.setPanoId(panoId, center);
+            rvContainer.classList.remove('hidden');
+            btnText.innerText = '지도 보기';
+            isRoadviewActive = true;
+          } else {
+            alert('이 위치 주변에는 제공되는 로드뷰가 없습니다.');
+          }
+        });
+      } else {
+        // 로드뷰 닫기
+        rvContainer.classList.add('hidden');
+        btnText.innerText = '로드뷰 보기';
+        isRoadviewActive = false;
+      }
     }
   </script>
 </body>
 </html>
+
+```
