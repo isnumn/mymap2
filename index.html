@@ -8,7 +8,7 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- 카카오 지도 JavaScript SDK (직접 로드) -->
+  <!-- 카카오 지도 JavaScript SDK -->
   <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=80bbf22d0111456cf471556fa6f0b270&libraries=services&autoload=false"></script>
   
   <style>
@@ -69,7 +69,7 @@
       <!-- 현재위치 버튼 -->
       <div class="absolute top-4 right-4 z-30 flex flex-col gap-2">
         <button 
-          onclick="moveToCurrentLocation()" 
+          id="btn-current-location"
           class="bg-white hover:bg-gray-100 text-gray-800 font-bold px-3 py-2 rounded-lg shadow-md border border-gray-300 text-xs flex items-center gap-1"
         >
           🎯 현재 위치
@@ -81,14 +81,23 @@
 
   <!-- JavaScript 연동 -->
   <script>
-    let map = null;
-    let ps = null;
-    let infowindow = null;
-    let markers = [];
-    let currentLocation = null;
-    let allHighSchools = [];
+    var map = null;
+    var ps = null;
+    var infowindow = null;
+    var markers = [];
+    var currentLocation = null;
+    var allHighSchools = [];
 
-    const goyangBoundsRect = "126.7000,37.5800,126.9600,37.7300";
+    var goyangBoundsRect = "126.7000,37.5800,126.9600,37.7300";
+
+    // 현재 위치 이동 전역 함수
+    function moveToCurrentLocation() {
+      if (currentLocation && map) {
+        map.panTo(currentLocation);
+      } else {
+        alert('현재 위치 정보를 가져오는 중이거나 위치 권한이 승인되지 않았습니다.');
+      }
+    }
 
     // 카카오 SDK 로드 완료 후 실행
     if (window.kakao && window.kakao.maps) {
@@ -100,10 +109,10 @@
     }
 
     function initMap() {
-      const mapContainer = document.getElementById('map');
-      const goyangCenter = new kakao.maps.LatLng(37.6584, 126.8320);
+      var mapContainer = document.getElementById('map');
+      var goyangCenter = new kakao.maps.LatLng(37.6584, 126.8320);
       
-      const options = {
+      var options = {
         center: goyangCenter,
         level: 6
       };
@@ -113,12 +122,45 @@
         ps = new kakao.maps.services.Places();
         infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
 
-        setTimeout(() => {
+        // 버튼 이벤트 바인딩
+        var btn = document.getElementById('btn-current-location');
+        if (btn) {
+          btn.onclick = moveToCurrentLocation;
+        }
+
+        setTimeout(function() {
           map.relayout();
           map.setCenter(goyangCenter);
         }, 300);
 
-        // 고양시 고등학교 전체 페이징 검색 시작
         searchGoyangHighSchoolsAllPages();
         getCurrentLocation();
       } catch (e) {
+        console.error(e);
+        document.getElementById('status-message').innerHTML = '<span class="text-red-500 font-bold">⚠️ 지도 생성 오류 발생</span>';
+      }
+    }
+
+    function getCurrentLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function (position) {
+            var lat = position.coords.latitude;
+            var lng = position.coords.longitude;
+            currentLocation = new kakao.maps.LatLng(lat, lng);
+
+            new kakao.maps.Marker({
+              position: currentLocation,
+              map: map
+            });
+          },
+          function (error) {
+            console.log('위치 권한 미허용');
+          }
+        );
+      }
+    }
+
+    function createSchoolMarkerImage(colorHex) {
+      var svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+        <circle cx="
